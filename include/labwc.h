@@ -311,6 +311,10 @@ struct server {
 	struct sfdo *sfdo;
 
 	pid_t primary_client_pid;
+
+	/* IPC socket */
+	int ipc_fd;
+	struct wl_event_source *ipc_event_source;
 };
 
 void xdg_popup_create(struct view *view, struct wlr_xdg_popup *wlr_popup);

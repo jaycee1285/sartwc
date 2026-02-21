@@ -32,7 +32,7 @@ static const struct option long_options[] = {
 };
 
 static const char labwc_usage[] =
-"Usage: labwc [options...]\n"
+"Usage: sartwc [options...]\n"
 "  -c, --config <file>      Specify config file (with path)\n"
 "  -C, --config-dir <dir>   Specify config directory\n"
 "  -d, --debug              Enable full logging, including debug information\n"
@@ -56,7 +56,7 @@ static void
 print_version(void)
 {
 	#define FEATURE_ENABLED(feature) (HAVE_##feature ? "+" : "-")
-	printf("labwc %s (%sxwayland %snls %srsvg %slibsfdo)\n",
+	printf("sartwc %s (%sxwayland %snls %srsvg %slibsfdo)\n",
 		LABWC_VERSION,
 		FEATURE_ENABLED(XWAYLAND),
 		FEATURE_ENABLED(NLS),
@@ -107,9 +107,9 @@ die_on_no_fonts(void)
 static void
 send_signal_to_labwc_pid(int signal)
 {
-	char *labwc_pid = getenv("LABWC_PID");
+	char *labwc_pid = getenv("SARTWC_PID");
 	if (!labwc_pid) {
-		wlr_log(WLR_ERROR, "LABWC_PID not set");
+		wlr_log(WLR_ERROR, "SARTWC_PID not set");
 		exit(EXIT_FAILURE);
 	}
 	int pid = atoi(labwc_pid);
@@ -220,23 +220,23 @@ main(int argc, char *argv[])
 	rcxml_read(rc.config_file);
 
 	/*
-	 * Set environment variable LABWC_PID to the pid of the compositor
+	 * Set environment variable SARTWC_PID to the pid of the compositor
 	 * so that SIGHUP and SIGTERM can be sent to specific instances using
-	 * `kill -s <signal> <pid>` rather than `killall -s <signal> labwc`
+	 * `kill -s <signal> <pid>` rather than `killall -s <signal> sartwc`
 	 */
 	char pid[32];
 	snprintf(pid, sizeof(pid), "%d", getpid());
-	if (setenv("LABWC_PID", pid, true) < 0) {
-		wlr_log_errno(WLR_ERROR, "unable to set LABWC_PID");
+	if (setenv("SARTWC_PID", pid, true) < 0) {
+		wlr_log_errno(WLR_ERROR, "unable to set SARTWC_PID");
 	} else {
-		wlr_log(WLR_DEBUG, "LABWC_PID=%s", pid);
+		wlr_log(WLR_DEBUG, "SARTWC_PID=%s", pid);
 	}
 
 	/* useful for helper programs */
-	if (setenv("LABWC_VER", LABWC_VERSION, true) < 0) {
-		wlr_log_errno(WLR_ERROR, "unable to set LABWC_VER");
+	if (setenv("SARTWC_VER", LABWC_VERSION, true) < 0) {
+		wlr_log_errno(WLR_ERROR, "unable to set SARTWC_VER");
 	} else {
-		wlr_log(WLR_DEBUG, "LABWC_VER=%s", LABWC_VERSION);
+		wlr_log(WLR_DEBUG, "SARTWC_VER=%s", LABWC_VERSION);
 	}
 
 	if (!getenv("XDG_RUNTIME_DIR")) {

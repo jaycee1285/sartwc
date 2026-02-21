@@ -67,6 +67,7 @@
 #include "view.h"
 #include "workspaces.h"
 #include "xwayland.h"
+#include "ipc.h"
 
 #define LAB_EXT_DATA_CONTROL_VERSION 1
 #define LAB_EXT_FOREIGN_TOPLEVEL_LIST_VERSION 1
@@ -757,11 +758,15 @@ server_start(struct server *server)
 	} else {
 		wlr_log(WLR_DEBUG, "WAYLAND_DISPLAY=%s", socket);
 	}
+
+	ipc_init(server);
 }
 
 void
 server_finish(struct server *server)
 {
+	ipc_finish(server);
+
 #if HAVE_XWAYLAND
 	xwayland_server_finish(server);
 #endif

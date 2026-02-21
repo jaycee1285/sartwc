@@ -1,293 +1,85 @@
-# labwc
-
-<h3 align="center">[<a
-href="https://labwc.github.io/">Website</a>] [<a
-href="https://github.com/labwc/labwc-scope#readme">Scope</a>] [<a
-href="https://web.libera.chat/gamja/?channels=#labwc">IRC&nbsp;Channel</a>] [<a
-href="NEWS.md">Release&nbsp;Notes</a>]</h3>
-
-- [1. Project Description](#1-project-description)
-  - [1.1 What Is This?](#11-what-is-this)
-  - [1.2 Why](#12-why)
-  - [1.3 Why The Openbox Theme Specification?](#13-why-the-openbox-theme-specification)
-  - [1.4 Very High Level Scope](#14-very-high-level-scope)
-  - [1.5 Videos](#15-videos)
-  - [1.6 Screenshot](#16-screenshot)
-- [2. Build and Installation](#2-build-and-installation)
-- [3. Configuration](#3-configuration)
-- [4. Theming](#4-theming)
-- [5. Usage](#5-usage)
-  - [5.1 Gaming](#51-gaming)
-- [6. Integration](#6-integration)
-- [7. Translations](#7-translations)
-
-## 1. Project Description
-
-### 1.1 What Is This?
-
-Labwc stands for Lab Wayland Compositor, where lab can mean any of the
-following:
-
-- lightweight and *box-inspired
-- sense of experimentation and treading new ground
-- inspired by BunsenLabs and ArchLabs
-- your favorite pet
-
-Labwc is a [wlroots]-based window-stacking compositor for [Wayland], inspired
-by [Openbox].
-
-It is light-weight and independent with a focus on simply stacking windows well
-and rendering some window decorations. It takes a no-bling/frills approach and
-says no to features such as animations.  It relies on clients for panels,
-screenshots, wallpapers and so on to create a full desktop environment.
-
-Labwc tries to stay in keeping with [wlroots] and [sway] in terms of general
-approach and coding style.
-
-Labwc has no reliance on any particular Desktop Environment, Desktop Shell or
-session. Nor does it depend on any UI toolkits such as Qt or GTK.
-
-### 1.2 Why?
-
-Firstly, we believe that there is a need for a simple Wayland window-stacking
-compositor which strikes a balance between minimalism and bloat approximately
-at the level where Window Managers like Openbox reside in the X11 domain.  Most
-of the core developers are accustomed to low resource Desktop Environments such
-as Mate/XFCE or standalone Window Managers such as Openbox under X11.  Labwc
-aims to make a similar setup possible under Wayland, with small and independent
-components rather than a large, integrated software eco-system.
+# SartWC
 
-Secondly, the Wayland community has achieved an amazing amount so far, and we
-want to help solve the unsolved problems to make Wayland viable for more
-people. We think that standardisation and de-fragmentation is a route to
-greater Wayland adoption, and wanting to play our part in this, Labwc only
-understands [wayland-protocols] &amp; [wlr-protocols], and it cannot be
-controlled with dbus, sway/i3/custom-IPC or other technology.
+**Stacking And Reasonable Tiling Window Compositor**
 
-Thirdly, it is important to us that scope is tightly controlled so that the
-compositor matures to production quality. On the whole, we value robustness,
-reliability, stability and simplicity over new features. Coming up with new
-ideas and features is easy - maintaining and stabilising them is not.
+A fork of [labwc](https://github.com/labwc/labwc) with a Unix socket IPC interface for programmatic window control.
 
-Fourthly, we are of the view that a compositor should be boring in order to do
-its job well. In this regard we follow in the footsteps of [metacity] which
-describes itself as a "Boring window manager for the adult in you. Many window
-managers are like Marshmallow Froot Loops; Metacity is like Cheerios."
+Also a play on Sartre — because other people's window managers are hell.
 
-Finally, we think that an elegant solution to all of this does not need to feel
-square and pixelated like something out of the 1990s, but should look
-contemporary and enable cutting-edge performance.
+## What This Is
 
-### 1.3 Why The Openbox Theme Specification?
+labwc is a wlroots-based Wayland stacking compositor inspired by Openbox. It's lightweight (~57 MB runtime), fast, and deliberately boring. The upstream project's philosophy explicitly rejects non-Wayland-protocol IPC.
 
-In order to avoid reinventing configuration and theme syntaxes, the [Openbox]
-3.6 specification is used. This does not mean that Labwc is an Openbox clone
-but rather that configuration files will look and feel familiar.
+SartWC adds one thing: a text-based IPC socket that lets external tools send actions and query compositor state. This enables tools like [intentile](https://github.com/your/intentile) to place windows, manage workspaces, and read window geometry without simulating keyboard input through wtype.
 
-Also, parsing GTK3+ and Qt themes for window decorations is very complicated,
-so using much simpler specs such as those used by Openbox and xfwm makes sense
-for a compositor such as Labwc, both in terms of implementation and for user
-modification.
+## What Changed From Upstream
 
-Openbox spec is somewhat of a stable standard considering how long it has
-remained unchanged for and how wide-spread its adoption is by lightweight
-distributions such as LXDE, LXQt, BunsenLabs, ArchLabs, Mabox and Raspbian. Some
-widely used themes (for example Numix and Arc) have built-in support.
+**New files:**
+- `src/ipc.c` — ~290 lines. Unix socket server on the Wayland event loop.
+- `include/ipc.h` — Header.
 
-We could have invented a whole new syntax, but that's not where we want to
-spend our effort.
+**Modified files:**
+- `include/labwc.h` — Two fields added to `struct server` (socket fd + event source).
+- `src/server.c` — Three lines: include, `ipc_init()`, `ipc_finish()`.
+- `src/meson.build` — One line: `ipc.c` added to source list.
+- `src/main.c` — Env vars renamed to `SARTWC_*`.
+- `meson.build` — Project name and version.
+- `data/labwc.desktop` — Session entry renamed.
 
-### 1.4 Very High Level Scope
+Everything else is unmodified labwc 0.9.3.
 
-A lot of emphasis is put on code simplicity when considering features.
+## IPC Protocol
 
-See [scope] for full details on implemented features.
+Socket at `$XDG_RUNTIME_DIR/sartwc-$WAYLAND_DISPLAY.sock`. Text protocol, newline-delimited.
 
-### 1.5 Videos
+**Actions** — same names as rc.xml, case-insensitive:
+```
+echo "MoveTo x=0 y=0" | socat - UNIX:$SARTWC_IPC_SOCKET
+echo "ResizeTo width=50% height=100%" | socat - UNIX:$SARTWC_IPC_SOCKET
+echo "GoToDesktop to=right wrap=yes" | socat - UNIX:$SARTWC_IPC_SOCKET
+echo "SendToDesktop to=3 follow=no" | socat - UNIX:$SARTWC_IPC_SOCKET
+echo "Close" | socat - UNIX:$SARTWC_IPC_SOCKET
+```
 
-| video link                | date        | duration
-| ------------------------- | ------------| -------
-| [0.8.3-release-video]     | 03-Mar-2025 | 2:35
-| [0.7.2-release-video]     | 24-May-2024 | 3:17
-| [0.6.0-release-video]     | 31-Oct-2022 | 2:48
-| [0.3.0-release-video]     | 05-Aug-2021 | 1:10
-| [pre-0.1.0-release-video] | 25-Feb-2021 | 3:42
+**Queries:**
+```
+echo "list-views" | socat - UNIX:$SARTWC_IPC_SOCKET
+# Returns: app_id, title, workspace, x/y/w/h, state flags per window
 
-[0.8.3-release-video]: https://youtu.be/HGzqci_THwA
-[0.7.2-release-video]: https://youtu.be/gNIj6VU-IH8
-[0.6.0-release-video]: https://youtu.be/guBnx18EQiA
-[0.3.0-release-video]: https://youtu.be/AU_M3n_FS-E
-[pre-0.1.0-release-video]: https://youtu.be/rE1bQjSVJzg
+echo "list-workspaces" | socat - UNIX:$SARTWC_IPC_SOCKET
+# Returns: workspace list with index, name, active flag
+```
 
-### 1.6 Screenshot
+Full protocol docs: see `intentile/docs/SARTWC-IPC.md` in the intentile repo.
 
-The obligatory screenshot:
+## Building
 
-<a href="https://labwc.github.io/img/scrot1.png">
-  <img src="https://labwc.github.io/img/scrot1-small.png">
-</a><br />
-<a href="https://labwc.github.io/obligatory-screenshot.html">
-  <small>Screenshot description</small>
-</a>
+```bash
+nix build   # 7 seconds from clean
+```
 
-## 2. Build and Installation
+Or with meson directly:
+```bash
+meson setup build
+ninja -C build
+```
 
-To build, simply run:
+## Configuration
 
-    meson setup build/
-    meson compile -C build/
+SartWC reads the same `~/.config/labwc/` config files as labwc (rc.xml, menu.xml, autostart, etc.). It is a drop-in replacement.
 
-Run-time dependencies include:
+## Environment Variables
 
-- wlroots, wayland, libinput, xkbcommon
-- libxml2, cairo, pango, glib-2.0
-- libpng
-- librsvg >=2.46 (optional)
-- libsfdo (optional)
-- xwayland, xcb (optional)
+| Variable | Description |
+|----------|-------------|
+| `SARTWC_IPC_SOCKET` | Path to IPC socket |
+| `SARTWC_PID` | Compositor PID |
+| `SARTWC_VER` | Version string |
 
-Build dependencies include:
+## License
 
-- meson, ninja, gcc/clang
-- wayland-protocols
+GPL-2.0-only, same as labwc.
 
-Disable xwayland with `meson -Dxwayland=disabled build/`
+## Upstream
 
-For OS/distribution specific details see [wiki].
-
-If the right version of `wlroots` is not found on the system, the build setup
-will automatically download the wlroots repo. If this fallback is not desired
-please use:
-
-    meson setup --wrap-mode=nodownload build/
-
-To enforce the supplied wlroots.wrap file, run:
-
-    meson setup --force-fallback-for=wlroots build/
-
-If installing after using the wlroots.wrap file, use the following to
-prevent installing the wlroots headers:
-
-    meson install --skip-subprojects -C build/
-
-## 3. Configuration
-
-User config files are located at `${XDG_CONFIG_HOME:-$HOME/.config/labwc/}`
-with the following six files being used: [rc.xml], [menu.xml], [autostart], [shutdown],
-[environment] and [themerc-override].
-
-Run `labwc --reconfigure` to reload configuration and theme.
-
-For a step-by-step initial configuration guide, see [getting-started].
-
-## 4. Theming
-
-Themes are located at `~/.local/share/themes/\<theme-name\>/labwc/` or
-equivalent `XDG_DATA_{DIRS,HOME}` location in accordance with freedesktop XDG
-directory specification.
-
-For full theme options, see [labwc-theme(5)] or the [themerc] example file.
-
-For themes, search the internet for "openbox themes" and place them in
-`~/.local/share/themes/`. Some good starting points include:
-
-- https://github.com/addy-dclxvi/openbox-theme-collections
-- https://github.com/the-zero885/Lubuntu-Arc-Round-Openbox-Theme
-- https://github.com/BunsenLabs/bunsen-themes
-
-## 5. Usage
-
-    ./build/labwc [-s <command>]
-
-> **_NOTE:_** If you are running on **NVIDIA**, you will need the
-> `nvidia-drm.modeset=1` kernel parameter.
-
-If you have not created an rc.xml config file, default bindings will be:
-
-| combination              | action
-| ------------------------ | ------
-| `alt`-`tab`              | activate next window
-| `alt`-`shift`-`tab`      | activate previous window
-| `super`-`return`         | lab-sensible-terminal
-| `alt`-`F4`               | close window
-| `super`-`a`              | toggle maximize
-| `super`-`mouse-left`     | move window
-| `super`-`mouse-right`    | resize window
-| `super`-`arrow`          | resize window to fill half the output
-| `alt`-`space`            | show the window menu
-| `XF86_AudioLowerVolume`  | amixer sset Master 5%-
-| `XF86_AudioRaiseVolume`  | amixer sset Master 5%+
-| `XF86_AudioMute`         | amixer sset Master toggle
-| `XF86_MonBrightnessUp`   | brightnessctl set +10%
-| `XF86_MonBrightnessDown` | brightnessctl set 10%-
-
-A root-menu can be opened by clicking on the desktop.
-
-### 5.1 Gaming
-
-Cursor confinement is supported from version `0.6.2`. If using older versions,
-use a nested [gamescope] instance for gaming.  It can be added to steam via
-game launch option: `gamescope -f -- %command%`.
-
-## 6. Integration
-
-Suggested apps to use with Labwc:
-
-- Screen shooter: [grim]
-- Screen recorder: [wf-recorder]
-- Background image: [swaybg]
-- Panel: [waybar], [lavalauncher], [sfwbar], [xfce4-panel]
-- Launchers: [bemenu], [fuzzel], [wofi]
-- Output managers: [wlopm], [kanshi], [wlr-randr]
-- Screen locker: [swaylock]
-- Gamma adjustment: [gammastep]
-- Idle screen inhibitor: [sway-audio-idle-inhibit]
-
-See [integration] for further details.
-
-## 7. Translations
-
-The default window bar menu can be translated on the [weblate platform](https://translate.lxqt-project.org/projects/labwc/labwc/).
-
-<a href="https://translate.lxqt-project.org/engage/labwc/?utm_source=widget">
-<img src="https://translate.lxqt-project.org/widgets/labwc/-/labwc/multi-blue.svg" alt="Translation status" />
-</a>
-
-[Wayland]: https://wayland.freedesktop.org/
-[Openbox]: https://openbox.org/help/Contents
-[wlroots]: https://gitlab.freedesktop.org/wlroots/wlroots
-[sway]: https://github.com/swaywm
-[wayland-protocols]: https://gitlab.freedesktop.org/wayland/wayland-protocols
-[wlr-protocols]: https://gitlab.freedesktop.org/wlroots/wlr-protocols
-[scope]: https://github.com/labwc/labwc-scope#readme
-[wiki]: https://github.com/labwc/labwc/wiki
-[getting-started]: https://labwc.github.io/getting-started.html
-[integration]: https://labwc.github.io/integration.html
-[metacity]: https://github.com/GNOME/metacity
-
-[rc.xml]: docs/rc.xml.all
-[menu.xml]: docs/menu.xml
-[autostart]: docs/autostart
-[shutdown]: docs/shutdown
-[environment]: docs/environment
-[themerc-override]: docs/themerc
-[themerc]: docs/themerc
-[labwc-theme(5)]: https://labwc.github.io/labwc-theme.5.html
-
-[gamescope]: https://github.com/Plagman/gamescope
-[grim]: https://github.com/emersion/grim
-[wf-recorder]: https://github.com/ammen99/wf-recorder
-[swaybg]: https://github.com/swaywm/swaybg
-[waybar]: https://github.com/Alexays/Waybar
-[lavalauncher]: https://sr.ht/~leon_plickat/LavaLauncher
-[sfwbar]: https://github.com/LBCrion/sfwbar
-[xfce4-panel]: https://gitlab.xfce.org/xfce/xfce4-panel
-[bemenu]: https://github.com/Cloudef/bemenu
-[fuzzel]: https://codeberg.org/dnkl/fuzzel
-[wofi]: https://hg.sr.ht/~scoopta/wofi
-[wlopm]: https://git.sr.ht/~leon_plickat/wlopm
-[kanshi]: https://sr.ht/~emersion/kanshi/
-[wlr-randr]: https://sr.ht/~emersion/wlr-randr/
-[swaylock]: https://github.com/swaywm/swaylock
-[gammastep]: https://gitlab.com/chinstrap/gammastep
-[sway-audio-idle-inhibit]: https://github.com/ErikReider/SwayAudioIdleInhibit
+All credit for the compositor itself goes to the [labwc project](https://github.com/labwc/labwc). The IPC patch is the only addition.
