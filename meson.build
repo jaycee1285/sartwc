@@ -1,5 +1,5 @@
 project(
-  'labwc',
+  'sartwc',
   'c',
   version: '0.9.3',
   license: 'GPL-2.0-only',
@@ -207,7 +207,7 @@ executable(
   link_args: link_args,
 )
 
-install_data('data/labwc.desktop', install_dir: get_option('datadir') / 'wayland-sessions')
+install_data('data/sartwc.desktop', install_dir: get_option('datadir') / 'wayland-sessions')
 
 install_data('data/labwc-portals.conf', install_dir: get_option('datadir') / 'xdg-desktop-portal')
 

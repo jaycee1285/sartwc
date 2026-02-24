@@ -26,6 +26,7 @@
 #include "input/input.h"
 #include "input/keyboard.h"
 #include "input/key-state.h"
+#include "ipc.h"
 #include "labwc.h"
 #include "output.h"
 #include "session-lock.h"
@@ -623,6 +624,7 @@ handle_focus_change(struct wl_listener *listener, void *data)
 			tablet_pad_enter_surface(seat, surface);
 		}
 		server->active_view = view;
+		ipc_notify_focus_changed(server);
 	}
 }
 

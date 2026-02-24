@@ -427,6 +427,7 @@ void
 server_init(struct server *server)
 {
 	server->primary_client_pid = -1;
+	server->ipc_fd = -1;
 	server->wl_display = wl_display_create();
 	if (!server->wl_display) {
 		wlr_log(WLR_ERROR, "cannot allocate a wayland display");

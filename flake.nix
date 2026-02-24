@@ -14,9 +14,7 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-        in
-        {
-          default = pkgs.stdenv.mkDerivation {
+          sartwcPkg = pkgs.stdenv.mkDerivation {
             pname = "sartwc";
             version = "0.9.3-ipc";
 
@@ -56,6 +54,25 @@
               (pkgs.lib.mesonEnable "xwayland" true)
             ];
 
+            # Older source revisions still install `labwc`; provide a stable `sartwc`
+            # entrypoint so downstream consumers can reference `${pkg}/bin/sartwc`.
+            postInstall = ''
+              if [ -x "$out/bin/labwc" ] && [ ! -e "$out/bin/sartwc" ]; then
+                ln -s labwc "$out/bin/sartwc"
+              fi
+
+              if [ -f "$out/share/wayland-sessions/labwc.desktop" ] && [ ! -f "$out/share/wayland-sessions/sartwc.desktop" ]; then
+                cp "$out/share/wayland-sessions/labwc.desktop" "$out/share/wayland-sessions/sartwc.desktop"
+              fi
+
+              if [ -f "$out/share/wayland-sessions/sartwc.desktop" ]; then
+                substituteInPlace "$out/share/wayland-sessions/sartwc.desktop" \
+                  --replace-warn 'Exec=labwc' 'Exec=sartwc' \
+                  --replace-warn 'Name=labwc' 'Name=sartwc' \
+                  --replace-warn 'DesktopNames=labwc;wlroots' 'DesktopNames=sartwc;wlroots'
+              fi
+            '';
+
             strictDeps = true;
 
             meta = {
@@ -65,6 +82,22 @@
               platforms = pkgs.wayland.meta.platforms;
             };
           };
+        in
+        {
+          sartwc = sartwcPkg;
+          default = sartwcPkg;
+        });
+
+      apps = forAllSystems (system:
+        let
+          pkg = self.packages.${system}.default;
+        in
+        {
+          sartwc = {
+            type = "app";
+            program = "${pkg}/bin/sartwc";
+          };
+          default = self.apps.${system}.sartwc;
         });
 
       devShells = forAllSystems (system:

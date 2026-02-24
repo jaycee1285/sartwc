@@ -5,9 +5,12 @@
 #include <cairo.h>
 #include <pango/pangocairo.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_scene.h>
 #include "buffer.h"
@@ -17,6 +20,7 @@
 #include "common/mem.h"
 #include "config/rcxml.h"
 #include "input/keyboard.h"
+#include "ipc.h"
 #include "labwc.h"
 #include "output.h"
 #include "protocols/cosmic-workspaces.h"
@@ -26,8 +30,192 @@
 
 #define COSMIC_WORKSPACES_VERSION 1
 #define EXT_WORKSPACES_VERSION 1
+#define WORKSPACE_STATE_FILE "workspaces.txt"
 
 /* Internal helpers */
+static void
+workspace_config_list_destroy(struct wl_list *list)
+{
+	struct workspace_config *conf, *tmp;
+	wl_list_for_each_safe(conf, tmp, list, link) {
+		zfree(conf->name);
+		wl_list_remove(&conf->link);
+		free(conf);
+	}
+}
+
+static bool
+mkdir_p(const char *path)
+{
+	if (!path || !*path) {
+		return false;
+	}
+
+	char *tmp = xstrdup(path);
+	for (char *p = tmp + 1; *p; ++p) {
+		if (*p != '/') {
+			continue;
+		}
+		*p = '\0';
+		if (*tmp && mkdir(tmp, 0700) < 0 && errno != EEXIST) {
+			free(tmp);
+			return false;
+		}
+		*p = '/';
+	}
+
+	bool ok = mkdir(tmp, 0700) == 0 || errno == EEXIST;
+	free(tmp);
+	return ok;
+}
+
+static char *
+workspace_state_dir_path(void)
+{
+	const char *xdg_state_home = getenv("XDG_STATE_HOME");
+	const char *home = getenv("HOME");
+
+	if (xdg_state_home && *xdg_state_home) {
+		size_t len = strlen(xdg_state_home) + 1 + strlen("sartwc") + 1;
+		char *path = xmalloc(len);
+		snprintf(path, len, "%s/sartwc", xdg_state_home);
+		return path;
+	}
+	if (home && *home) {
+		size_t len = strlen(home) + strlen("/.local/state/sartwc") + 1;
+		char *path = xmalloc(len);
+		snprintf(path, len, "%s/.local/state/sartwc", home);
+		return path;
+	}
+
+	return NULL;
+}
+
+static char *
+workspace_state_file_path(void)
+{
+	char *dir = workspace_state_dir_path();
+	if (!dir) {
+		return NULL;
+	}
+
+	size_t len = strlen(dir) + 1 + strlen(WORKSPACE_STATE_FILE) + 1;
+	char *path = xmalloc(len);
+	snprintf(path, len, "%s/%s", dir, WORKSPACE_STATE_FILE);
+	free(dir);
+	return path;
+}
+
+static bool
+workspace_config_list_load_persisted(struct wl_list *out)
+{
+	wl_list_init(out);
+
+	char *path = workspace_state_file_path();
+	if (!path) {
+		return false;
+	}
+
+	FILE *fp = fopen(path, "r");
+	if (!fp) {
+		if (errno != ENOENT) {
+			wlr_log_errno(WLR_ERROR, "Failed to open workspace state file %s", path);
+		}
+		free(path);
+		return false;
+	}
+
+	char *line = NULL;
+	size_t cap = 0;
+	ssize_t nread;
+	int count = 0;
+	while ((nread = getline(&line, &cap, fp)) >= 0) {
+		while (nread > 0 && (line[nread - 1] == '\n' || line[nread - 1] == '\r')) {
+			line[--nread] = '\0';
+		}
+		if (nread <= 0) {
+			continue;
+		}
+
+		struct workspace_config *conf = znew(*conf);
+		conf->name = xstrdup(line);
+		wl_list_append(out, &conf->link);
+		count++;
+	}
+
+	free(line);
+	fclose(fp);
+	free(path);
+
+	if (count <= 0) {
+		workspace_config_list_destroy(out);
+		return false;
+	}
+
+	return true;
+}
+
+static void
+workspace_state_persist(struct server *server)
+{
+	char *dir = workspace_state_dir_path();
+	char *path = workspace_state_file_path();
+	if (!dir || !path) {
+		free(dir);
+		free(path);
+		return;
+	}
+	if (!mkdir_p(dir)) {
+		wlr_log_errno(WLR_ERROR, "Failed to create workspace state dir %s", dir);
+		free(dir);
+		free(path);
+		return;
+	}
+	free(dir);
+
+	size_t tmp_len = strlen(path) + strlen(".tmp") + 1;
+	char *tmp_path = xmalloc(tmp_len);
+	snprintf(tmp_path, tmp_len, "%s.tmp", path);
+
+	FILE *fp = fopen(tmp_path, "w");
+	if (!fp) {
+		wlr_log_errno(WLR_ERROR, "Failed to write workspace state file %s", tmp_path);
+		free(tmp_path);
+		free(path);
+		return;
+	}
+
+	struct workspace *workspace;
+	bool ok = true;
+	wl_list_for_each(workspace, &server->workspaces.all, link) {
+		const char *name = workspace->name ? workspace->name : "";
+		if (fputs(name, fp) == EOF || fputc('\n', fp) == EOF) {
+			ok = false;
+			break;
+		}
+	}
+
+	if (fclose(fp) != 0) {
+		ok = false;
+	}
+
+	if (!ok) {
+		wlr_log_errno(WLR_ERROR, "Failed while writing workspace state file %s", tmp_path);
+		unlink(tmp_path);
+		free(tmp_path);
+		free(path);
+		return;
+	}
+
+	if (rename(tmp_path, path) < 0) {
+		wlr_log_errno(WLR_ERROR, "Failed to replace workspace state file %s", path);
+		unlink(tmp_path);
+	}
+
+	free(tmp_path);
+	free(path);
+}
+
 static size_t
 parse_workspace_index(const char *name)
 {
@@ -206,6 +394,23 @@ workspace_find_by_name(struct server *server, const char *name)
 	}
 
 	wlr_log(WLR_ERROR, "Workspace '%s' not found", name);
+	return NULL;
+}
+
+static struct workspace *
+workspace_by_index(struct server *server, int index)
+{
+	if (index < 1) {
+		return NULL;
+	}
+
+	struct workspace *workspace;
+	int i = 1;
+	wl_list_for_each(workspace, &server->workspaces.all, link) {
+		if (i++ == index) {
+			return workspace;
+		}
+	}
 	return NULL;
 }
 
@@ -419,31 +624,28 @@ workspaces_init(struct server *server)
 
 	wl_list_init(&server->workspaces.all);
 
-	struct workspace_config *conf;
-	wl_list_for_each(conf, &rc.workspace_config.workspaces, link) {
-		add_workspace(server, conf->name);
-	}
+	/*
+	 * Startup policy: always begin a fresh session with a single workspace.
+	 * Runtime add/remove/rename persists and is used during reconfigure,
+	 * but a compositor launch intentionally resets to "1".
+	 */
+	add_workspace(server, "1");
 
 	/*
-	 * After adding workspaces, check if there is an initial workspace
-	 * selected and set that as the initial workspace.
+	 * Startup policy ignores rc.xml initial workspace selection because the
+	 * live session always starts with a single workspace.
 	 */
-	char *initial_name = rc.workspace_config.initial_workspace_name;
-	struct workspace *initial = NULL;
 	struct workspace *first = wl_container_of(
 		server->workspaces.all.next, first, link);
-
-	if (initial_name) {
-		initial = workspace_find_by_name(server, initial_name);
-	}
-	if (!initial) {
-		initial = first;
-	}
+	struct workspace *initial = first;
 
 	server->workspaces.current = initial;
 	wlr_scene_node_set_enabled(&initial->tree->node, true);
 	lab_cosmic_workspace_set_active(initial->cosmic_workspace, true);
 	lab_ext_workspace_set_active(initial->ext_workspace, true);
+
+	/* Overwrite any previous session's persisted workspace list at launch. */
+	workspace_state_persist(server);
 }
 
 /*
@@ -520,6 +722,8 @@ workspaces_switch_to(struct workspace *target, bool update_focus)
 
 	lab_cosmic_workspace_set_active(target->cosmic_workspace, true);
 	lab_ext_workspace_set_active(target->ext_workspace, true);
+
+	ipc_notify_workspace_changed(server);
 }
 
 void
@@ -592,9 +796,15 @@ workspaces_reconfigure(struct server *server)
 	 */
 
 	struct wl_list *workspace_link = server->workspaces.all.next;
+	bool list_changed = false;
+	struct wl_list persisted_workspaces;
+	bool have_persisted = workspace_config_list_load_persisted(&persisted_workspaces);
+	struct wl_list *workspace_source = have_persisted
+		? &persisted_workspaces
+		: &rc.workspace_config.workspaces;
 
 	struct workspace_config *conf;
-	wl_list_for_each(conf, &rc.workspace_config.workspaces, link) {
+	wl_list_for_each(conf, workspace_source, link) {
 		struct workspace *workspace = wl_container_of(
 			workspace_link, workspace, link);
 
@@ -603,6 +813,7 @@ workspaces_reconfigure(struct server *server)
 			wlr_log(WLR_DEBUG, "Adding workspace \"%s\"",
 				conf->name);
 			add_workspace(server, conf->name);
+			list_changed = true;
 			continue;
 		}
 		if (strcmp(workspace->name, conf->name)) {
@@ -614,11 +825,21 @@ workspaces_reconfigure(struct server *server)
 				workspace->cosmic_workspace, workspace->name);
 			lab_ext_workspace_set_name(
 				workspace->ext_workspace, workspace->name);
+			list_changed = true;
 		}
 		workspace_link = workspace_link->next;
 	}
 
 	if (workspace_link == &server->workspaces.all) {
+		if (list_changed) {
+			workspace_state_persist(server);
+		}
+		if (list_changed) {
+			ipc_notify_workspace_list_changed(server);
+		}
+		if (have_persisted) {
+			workspace_config_list_destroy(&persisted_workspaces);
+		}
 		return;
 	}
 
@@ -651,7 +872,101 @@ workspaces_reconfigure(struct server *server)
 
 		workspace_link = workspace_link->next;
 		destroy_workspace(workspace);
+		list_changed = true;
 	}
+
+	if (list_changed) {
+		workspace_state_persist(server);
+		ipc_notify_workspace_list_changed(server);
+	}
+	if (have_persisted) {
+		workspace_config_list_destroy(&persisted_workspaces);
+	}
+}
+
+bool
+workspaces_add_named(struct server *server, const char *name)
+{
+	if (!server || !name || !*name) {
+		return false;
+	}
+
+	add_workspace(server, name);
+	workspace_state_persist(server);
+	ipc_notify_workspace_list_changed(server);
+	return true;
+}
+
+bool
+workspaces_rename_index(struct server *server, int index, const char *name)
+{
+	if (!server || !name || !*name) {
+		return false;
+	}
+
+	struct workspace *workspace = workspace_by_index(server, index);
+	if (!workspace) {
+		return false;
+	}
+
+	if (strcmp(workspace->name, name)) {
+		xstrdup_replace(workspace->name, name);
+		lab_cosmic_workspace_set_name(workspace->cosmic_workspace, workspace->name);
+		lab_ext_workspace_set_name(workspace->ext_workspace, workspace->name);
+		workspace_state_persist(server);
+		ipc_notify_workspace_list_changed(server);
+	}
+
+	return true;
+}
+
+bool
+workspaces_remove_index(struct server *server, int index)
+{
+	if (!server) {
+		return false;
+	}
+
+	size_t count = wl_list_length(&server->workspaces.all);
+	if (count <= 1) {
+		return false;
+	}
+
+	struct workspace *workspace = workspace_by_index(server, index);
+	if (!workspace) {
+		return false;
+	}
+
+	struct workspace *fallback = NULL;
+	if (workspace->link.next != &server->workspaces.all) {
+		fallback = wl_container_of(workspace->link.next, fallback, link);
+	} else {
+		fallback = wl_container_of(server->workspaces.all.next, fallback, link);
+	}
+	if (!fallback || fallback == workspace) {
+		return false;
+	}
+
+	overlay_finish(&server->seat);
+
+	struct view *view;
+	wl_list_for_each(view, &server->views, link) {
+		if (view->workspace == workspace) {
+			view_move_to_workspace(view, fallback);
+		}
+	}
+
+	if (server->workspaces.current == workspace) {
+		workspaces_switch_to(fallback, /* update_focus */ true);
+	}
+	if (server->workspaces.last == workspace) {
+		server->workspaces.last = fallback;
+	}
+
+	destroy_workspace(workspace);
+	workspace_state_persist(server);
+	ipc_notify_workspace_list_changed(server);
+	return true;
 }
 
 void

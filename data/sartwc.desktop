@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=sartwc
+Comment=A wayland stacking compositor (labwc fork with IPC)
+Exec=sartwc
+Icon=labwc
+Type=Application
+DesktopNames=sartwc;wlroots

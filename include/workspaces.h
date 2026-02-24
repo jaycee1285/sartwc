@@ -41,5 +41,8 @@ void workspaces_osd_hide(struct seat *seat);
 struct workspace *workspaces_find(struct workspace *anchor, const char *name,
 	bool wrap);
 void workspaces_reconfigure(struct server *server);
+bool workspaces_add_named(struct server *server, const char *name);
+bool workspaces_rename_index(struct server *server, int index, const char *name);
+bool workspaces_remove_index(struct server *server, int index);
 
 #endif /* LABWC_WORKSPACES_H */
