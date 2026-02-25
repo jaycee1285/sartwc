@@ -600,8 +600,7 @@ handle_command(struct ipc_client *client, char *line)
 	}
 
 	struct action *action = action_create(action_name);
-	if (!action_is_valid(action)) {
-		action_free(action);
+	if (!action) {
 		(void)ipc_send_str(client_fd, "ERROR unknown action\n");
 		return;
 	}
@@ -614,6 +613,12 @@ handle_command(struct ipc_client *client, char *line)
 			*eq = '\0';
 			action_arg_add_str(action, token, eq + 1);
 		}
+	}
+
+	if (!action_is_valid(action)) {
+		action_free(action);
+		(void)ipc_send_str(client_fd, "ERROR missing required argument\n");
+		return;
 	}
 
 	/* Build a temporary action list and run it */
