@@ -1,0 +1,80 @@
+# Labwc pot file
+# Copyright (C) 2024
+# This file is distributed under the same license as the labwc package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: labwc\n"
+"Report-Msgid-Bugs-To: https://github.com/labwc/labwc/issues\n"
+"POT-Creation-Date: 2024-09-19 21:09+1000\n"
+"PO-Revision-Date: 2025-07-04 04:24+0000\n"
+"Last-Translator: Sa'eed M Farahani <silitonix@gmail.com>\n"
+"Language-Team: Persian <https://translate.lxqt-project.org/projects/labwc/"
+"labwc/fa/>\n"
+"Language: fa\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+"X-Generator: Weblate 4.2.1\n"
+
+#: src/menu/menu.c:1016
+msgid "Go there..."
+msgstr "برو اونجا ..."
+
+#: src/menu/menu.c:1034
+msgid "Terminal"
+msgstr "پایانه"
+
+#: src/menu/menu.c:1040
+msgid "Reconfigure"
+msgstr "تنظیم دوباره"
+
+#: src/menu/menu.c:1042
+msgid "Exit"
+msgstr "خروج"
+
+#: src/menu/menu.c:1056
+msgid "Minimize"
+msgstr "کوچکنمایی"
+
+#: src/menu/menu.c:1058
+msgid "Maximize"
+msgstr "بزرگنمایی"
+
+#: src/menu/menu.c:1060
+msgid "Fullscreen"
+msgstr "تمام‌صفحه"
+
+#: src/menu/menu.c:1062
+msgid "Roll Up/Down"
+msgstr "غلتاندن به بالا/پایین"
+
+#: src/menu/menu.c:1064
+msgid "Decorations"
+msgstr "آرایش"
+
+#: src/menu/menu.c:1066
+msgid "Always on Top"
+msgstr "همیشه رو"
+
+#: src/menu/menu.c:1071
+msgid "Move Left"
+msgstr "حرکت به چپ"
+
+#: src/menu/menu.c:1078
+msgid "Move Right"
+msgstr "حرکت به راست"
+
+#: src/menu/menu.c:1083
+msgid "Always on Visible Workspace"
+msgstr "همیشه در فضای کاری قابل نمایش"
+
+#: src/menu/menu.c:1086
+msgid "Workspace"
+msgstr "فضای کار"
+
+#: src/menu/menu.c:1089
+msgid "Close"
+msgstr "بستن"
